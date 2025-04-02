@@ -21,14 +21,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class TunnelClient:
-    def __init__(self, aws_ip, aws_port, local_port):
+    def __init__(self, aws_ip, aws_port, local_port, minecraft_port):
         self.aws_ip = aws_ip
         self.aws_port = aws_port
         self.local_port = local_port  # Port we listen on locally
+        self.minecraft_port = minecraft_port  # Port where Minecraft server is running
         self.server_socket = None
         self.connection_state = "initialized"
         self.active_connections = 0
-        logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{local_port}")
+        logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{minecraft_port} (via {local_port})")
 
     def handle_local_connection(self, local_socket, local_addr):
         """Handle connections from local server"""
@@ -42,6 +43,10 @@ class TunnelClient:
             logger.debug(f"Connecting to AWS server at {self.aws_ip}:{self.aws_port}")
             aws_socket.connect((self.aws_ip, self.aws_port))
             logger.debug("Connected to AWS server")
+            
+            # Send target port as 4 bytes (big-endian)
+            port_bytes = self.minecraft_port.to_bytes(4, byteorder='big')
+            aws_socket.send(port_bytes)
             
             # Set TCP_NODELAY to disable Nagle's algorithm
             local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -89,7 +94,7 @@ class TunnelClient:
             
             self.connection_state = "running"
             logger.info(f"Tunnel client running. Listening on localhost:{self.local_port}")
-            logger.info(f"Forwarding to {self.aws_ip}:{self.aws_port}")
+            logger.info(f"Forwarding to {self.aws_ip}:{self.aws_port} -> localhost:{self.minecraft_port}")
             
             # Accept connections
             while self.connection_state == "running":
@@ -123,7 +128,8 @@ class TunnelClient:
 @click.option('--aws-ip', required=True, help='AWS EC2 instance public IP')
 @click.option('--aws-port', default=25566, help='Port on AWS instance')
 @click.option('--local-port', default=25567, help='Local port to listen on')
-def main(aws_ip, aws_port, local_port):
+@click.option('--minecraft-port', default=25565, help='Port where Minecraft server is running')
+def main(aws_ip, aws_port, local_port, minecraft_port):
     """Run the tunnel client on your local machine"""
     # Load environment variables
     load_dotenv()
@@ -132,7 +138,8 @@ def main(aws_ip, aws_port, local_port):
     client = TunnelClient(
         aws_ip=aws_ip,
         aws_port=aws_port,
-        local_port=local_port
+        local_port=local_port,
+        minecraft_port=minecraft_port
     )
 
     try:
@@ -141,7 +148,7 @@ def main(aws_ip, aws_port, local_port):
             logger.error("Failed to start client")
             sys.exit(1)
 
-        logger.info(f"Client is running. Forwarding localhost:{local_port} to {aws_ip}:{aws_port}")
+        logger.info(f"Client is running. Forwarding localhost:{local_port} to {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
         logger.info("Press Ctrl+C to stop the client")
 
         # Keep the client running and monitor connection state

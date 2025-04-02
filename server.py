@@ -34,11 +34,21 @@ class TunnelServer:
             self.active_connections += 1
             logger.debug(f"New connection from {client_addr} (Active connections: {self.active_connections})")
             
-            # Create connection to target port (25565 for Minecraft)
+            # Wait for the client to send the target port (4 bytes)
+            port_bytes = client_socket.recv(4)
+            if len(port_bytes) != 4:
+                logger.error(f"Invalid port data received: {len(port_bytes)} bytes")
+                return
+                
+            # Convert bytes to integer (big-endian)
+            target_port = int.from_bytes(port_bytes, byteorder='big')
+            logger.debug(f"Client requested connection to port {target_port}")
+            
+            # Create connection to target port
             target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             target_socket.settimeout(60)
-            logger.debug(f"Connecting to target port 25565")
-            target_socket.connect(('127.0.0.1', 25565))
+            logger.debug(f"Connecting to target port {target_port}")
+            target_socket.connect(('127.0.0.1', target_port))
             logger.debug("Connected to target port")
             
             # Set TCP_NODELAY to disable Nagle's algorithm
