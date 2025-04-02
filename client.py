@@ -7,6 +7,7 @@ import socket
 import click
 import threading
 import traceback
+import signal
 from dotenv import load_dotenv
 
 # Configure logging with more detail
@@ -29,6 +30,8 @@ class TunnelClient:
         self.server_socket = None
         self.connection_state = "initialized"
         self.active_connections = 0
+        self.forward_threads = []
+        self._stop_event = threading.Event()
         logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{minecraft_port} (via {local_port})")
 
     def handle_local_connection(self, local_socket, local_addr):
@@ -55,12 +58,15 @@ class TunnelClient:
             # Create bidirectional pipe
             def forward(source, destination, direction):
                 try:
-                    while True:
-                        data = source.recv(4096)
-                        if not data:
-                            break
-                        logger.debug(f"Forwarding {len(data)} bytes {direction}")
-                        destination.send(data)
+                    while not self._stop_event.is_set():
+                        try:
+                            data = source.recv(4096)
+                            if not data:
+                                break
+                            logger.debug(f"Forwarding {len(data)} bytes {direction}")
+                            destination.send(data)
+                        except socket.timeout:
+                            continue
                 except Exception as e:
                     logger.error(f"Error in {direction} forwarding: {str(e)}")
                 finally:
@@ -71,8 +77,13 @@ class TunnelClient:
                         pass
             
             # Start bidirectional forwarding
-            threading.Thread(target=forward, args=(local_socket, aws_socket, "local->aws")).start()
-            threading.Thread(target=forward, args=(aws_socket, local_socket, "aws->local")).start()
+            thread1 = threading.Thread(target=forward, args=(local_socket, aws_socket, "local->aws"))
+            thread2 = threading.Thread(target=forward, args=(aws_socket, local_socket, "aws->local"))
+            thread1.daemon = True
+            thread2.daemon = True
+            thread1.start()
+            thread2.start()
+            self.forward_threads.extend([thread1, thread2])
             
         except Exception as e:
             logger.error(f"Error handling local connection: {str(e)}")
@@ -97,12 +108,15 @@ class TunnelClient:
             logger.info(f"Forwarding to {self.aws_ip}:{self.aws_port} -> localhost:{self.minecraft_port}")
             
             # Accept connections
-            while self.connection_state == "running":
+            while self.connection_state == "running" and not self._stop_event.is_set():
                 try:
+                    self.server_socket.settimeout(1)  # Add timeout to allow checking stop_event
                     local_socket, local_addr = self.server_socket.accept()
                     threading.Thread(target=self.handle_local_connection, args=(local_socket, local_addr)).start()
+                except socket.timeout:
+                    continue
                 except Exception as e:
-                    if self.connection_state == "running":
+                    if self.connection_state == "running" and not self._stop_event.is_set():
                         logger.error(f"Error accepting connection: {str(e)}")
                         logger.error(f"Traceback: {traceback.format_exc()}")
             
@@ -115,14 +129,33 @@ class TunnelClient:
 
     def stop(self):
         """Stop the tunnel client"""
+        logger.info("Stopping tunnel client...")
+        self._stop_event.set()
         self.connection_state = "stopping"
+        
+        # Close server socket
         if self.server_socket:
             try:
                 self.server_socket.close()
             except:
                 pass
+        
+        # Wait for all forward threads to finish
+        for thread in self.forward_threads:
+            try:
+                thread.join(timeout=1)
+            except:
+                pass
+        
         self.connection_state = "stopped"
         logger.info("Tunnel client stopped")
+
+def signal_handler(signum, frame):
+    """Handle Ctrl+C"""
+    logger.info("Received shutdown signal")
+    if client:
+        client.stop()
+    sys.exit(0)
 
 @click.command()
 @click.option('--aws-ip', required=True, help='AWS EC2 instance public IP')
@@ -131,8 +164,14 @@ class TunnelClient:
 @click.option('--minecraft-port', default=25565, help='Port where Minecraft server is running')
 def main(aws_ip, aws_port, local_port, minecraft_port):
     """Run the tunnel client on your local machine"""
+    global client
+    
     # Load environment variables
     load_dotenv()
+
+    # Set up signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Create and configure client
     client = TunnelClient(
@@ -152,7 +191,7 @@ def main(aws_ip, aws_port, local_port, minecraft_port):
         logger.info("Press Ctrl+C to stop the client")
 
         # Keep the client running and monitor connection state
-        while True:
+        while not client._stop_event.is_set():
             time.sleep(1)
             if client.connection_state != "running":
                 logger.error(f"Connection state changed to: {client.connection_state}")
