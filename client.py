@@ -22,38 +22,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class TunnelClient:
-    def __init__(self, aws_ip, aws_port, local_port, minecraft_port):
+    def __init__(self, aws_ip, aws_port, minecraft_port):
         self.aws_ip = aws_ip
         self.aws_port = aws_port
-        self.local_port = local_port  # Port we listen on locally
         self.minecraft_port = minecraft_port  # Port where Minecraft server is running
-        self.server_socket = None
+        self.aws_socket = None
         self.connection_state = "initialized"
         self.active_connections = 0
         self.forward_threads = []
         self._stop_event = threading.Event()
-        logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{minecraft_port} (via {local_port})")
+        logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
 
-    def handle_local_connection(self, local_socket, local_addr):
-        """Handle connections from local server"""
+    def handle_minecraft_connection(self, aws_data_socket):
+        """Handle a new Minecraft connection from the AWS server"""
         try:
             self.active_connections += 1
-            logger.debug(f"New local connection from {local_addr} (Active connections: {self.active_connections})")
+            logger.debug(f"New Minecraft connection request (Active connections: {self.active_connections})")
             
-            # Connect to AWS server
-            aws_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            aws_socket.settimeout(60)
-            logger.debug(f"Connecting to AWS server at {self.aws_ip}:{self.aws_port}")
-            aws_socket.connect((self.aws_ip, self.aws_port))
-            logger.debug("Connected to AWS server")
-            
-            # Send target port as 4 bytes (little-endian)
-            port_bytes = self.minecraft_port.to_bytes(4, byteorder='little')
-            aws_socket.send(port_bytes)
+            # Connect to local Minecraft server
+            minecraft_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            minecraft_socket.settimeout(10)
+            logger.debug(f"Connecting to Minecraft server at localhost:{self.minecraft_port}")
+            try:
+                minecraft_socket.connect(('127.0.0.1', self.minecraft_port))
+                logger.debug("Connected to Minecraft server")
+            except Exception as e:
+                logger.error(f"Failed to connect to Minecraft server: {str(e)}")
+                return
             
             # Set TCP_NODELAY to disable Nagle's algorithm
-            local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            aws_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            minecraft_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            aws_data_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             
             # Create bidirectional pipe
             def forward(source, destination, direction):
@@ -67,6 +66,9 @@ class TunnelClient:
                             destination.send(data)
                         except socket.timeout:
                             continue
+                        except Exception as e:
+                            logger.error(f"Error in {direction} forwarding: {str(e)}")
+                            break
                 except Exception as e:
                     logger.error(f"Error in {direction} forwarding: {str(e)}")
                 finally:
@@ -77,8 +79,8 @@ class TunnelClient:
                         pass
             
             # Start bidirectional forwarding
-            thread1 = threading.Thread(target=forward, args=(local_socket, aws_socket, "local->aws"))
-            thread2 = threading.Thread(target=forward, args=(aws_socket, local_socket, "aws->local"))
+            thread1 = threading.Thread(target=forward, args=(minecraft_socket, aws_data_socket, "minecraft->aws"))
+            thread2 = threading.Thread(target=forward, args=(aws_data_socket, minecraft_socket, "aws->minecraft"))
             thread1.daemon = True
             thread2.daemon = True
             thread1.start()
@@ -86,39 +88,85 @@ class TunnelClient:
             self.forward_threads.extend([thread1, thread2])
             
         except Exception as e:
-            logger.error(f"Error handling local connection: {str(e)}")
+            logger.error(f"Error handling Minecraft connection: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
             self.active_connections -= 1
-            logger.debug(f"Local connection closed. Active connections: {self.active_connections}")
+            logger.debug(f"Minecraft connection closed. Active connections: {self.active_connections}")
+
+    def maintain_tunnel(self):
+        """Maintain the tunnel connection to the AWS server"""
+        try:
+            # Connect to AWS server
+            self.aws_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.aws_socket.settimeout(60)
+            logger.debug(f"Connecting to AWS server at {self.aws_ip}:{self.aws_port}")
+            self.aws_socket.connect((self.aws_ip, self.aws_port))
+            logger.debug("Connected to AWS server")
+            
+            # Send target port as 4 bytes (little-endian)
+            port_bytes = self.minecraft_port.to_bytes(4, byteorder='little')
+            logger.debug(f"Sending minecraft port {self.minecraft_port} as bytes: {port_bytes.hex()}")
+            logger.debug(f"Individual bytes: {[b for b in port_bytes]}")
+            bytes_sent = self.aws_socket.send(port_bytes)
+            logger.debug(f"Sent {bytes_sent} bytes")
+            
+            # Set TCP_NODELAY to disable Nagle's algorithm
+            self.aws_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            
+            # Wait for new connection signals
+            while not self._stop_event.is_set():
+                try:
+                    data = self.aws_socket.recv(1)
+                    if not data:
+                        logger.error("AWS server closed the connection")
+                        break
+                    
+                    # Check if it's a new connection signal
+                    if data == b'\x01':
+                        logger.debug("Received new connection signal from AWS")
+                        # Create a new socket for this connection's data
+                        aws_data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        aws_data_socket.connect((self.aws_ip, self.aws_port))
+                        
+                        # Send a special byte to identify this as a data socket
+                        # This helps the server distinguish between tunnel control and data connections
+                        aws_data_socket.send(b'\x02')
+                        
+                        # Start a thread to handle this connection
+                        threading.Thread(target=self.handle_minecraft_connection, args=(aws_data_socket,)).start()
+                    # Ignore heartbeat signals
+                    elif data == b'\x00':
+                        logger.debug("Received heartbeat from AWS")
+                    else:
+                        logger.warning(f"Received unknown signal from AWS: {data.hex()}")
+                        
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if not self._stop_event.is_set():
+                        logger.error(f"Error maintaining tunnel: {str(e)}")
+                        logger.error(f"Traceback: {traceback.format_exc()}")
+                    break
+            
+            logger.info("Tunnel maintenance thread stopping")
+            
+        except Exception as e:
+            logger.error(f"Error in tunnel maintenance: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            self.connection_state = "error"
 
     def start(self):
         """Start the tunnel client"""
         try:
             self.connection_state = "starting"
             
-            # Create server socket to listen for local connections
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind(('127.0.0.1', self.local_port))
-            self.server_socket.listen(5)
+            # Start the tunnel maintenance thread
+            threading.Thread(target=self.maintain_tunnel).start()
             
             self.connection_state = "running"
-            logger.info(f"Tunnel client running. Listening on localhost:{self.local_port}")
-            logger.info(f"Forwarding to {self.aws_ip}:{self.aws_port} -> localhost:{self.minecraft_port}")
-            
-            # Accept connections
-            while self.connection_state == "running" and not self._stop_event.is_set():
-                try:
-                    self.server_socket.settimeout(1)  # Add timeout to allow checking stop_event
-                    local_socket, local_addr = self.server_socket.accept()
-                    threading.Thread(target=self.handle_local_connection, args=(local_socket, local_addr)).start()
-                except socket.timeout:
-                    continue
-                except Exception as e:
-                    if self.connection_state == "running" and not self._stop_event.is_set():
-                        logger.error(f"Error accepting connection: {str(e)}")
-                        logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.info(f"Tunnel client running. Connected to {self.aws_ip}:{self.aws_port}")
+            logger.info(f"Forwarding connections to localhost:{self.minecraft_port}")
             
             return True
         except Exception as e:
@@ -133,10 +181,10 @@ class TunnelClient:
         self._stop_event.set()
         self.connection_state = "stopping"
         
-        # Close server socket
-        if self.server_socket:
+        # Close AWS socket
+        if self.aws_socket:
             try:
-                self.server_socket.close()
+                self.aws_socket.close()
             except:
                 pass
         
@@ -160,9 +208,8 @@ def signal_handler(signum, frame):
 @click.command()
 @click.option('--aws-ip', required=True, help='AWS EC2 instance public IP')
 @click.option('--aws-port', default=25566, help='Port on AWS instance')
-@click.option('--local-port', default=25567, help='Local port to listen on')
 @click.option('--minecraft-port', default=25565, help='Port where Minecraft server is running')
-def main(aws_ip, aws_port, local_port, minecraft_port):
+def main(aws_ip, aws_port, minecraft_port):
     """Run the tunnel client on your local machine"""
     global client
     
@@ -177,7 +224,6 @@ def main(aws_ip, aws_port, local_port, minecraft_port):
     client = TunnelClient(
         aws_ip=aws_ip,
         aws_port=aws_port,
-        local_port=local_port,
         minecraft_port=minecraft_port
     )
 
@@ -187,7 +233,7 @@ def main(aws_ip, aws_port, local_port, minecraft_port):
             logger.error("Failed to start client")
             sys.exit(1)
 
-        logger.info(f"Client is running. Forwarding localhost:{local_port} to {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
+        logger.info(f"Client is running. Tunneling {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
         logger.info("Press Ctrl+C to stop the client")
 
         # Keep the client running and monitor connection state
