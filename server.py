@@ -40,8 +40,14 @@ class TunnelServer:
                 logger.error(f"Invalid port data received: {len(port_bytes)} bytes")
                 return
                 
-            # Convert bytes to integer (big-endian)
-            target_port = int.from_bytes(port_bytes, byteorder='big')
+            # Convert bytes to integer (little-endian)
+            target_port = int.from_bytes(port_bytes, byteorder='little')
+            
+            # Validate port number
+            if not (0 <= target_port <= 65535):
+                logger.error(f"Invalid port number received: {target_port}")
+                return
+                
             logger.debug(f"Client requested connection to port {target_port}")
             
             # Create connection to target port

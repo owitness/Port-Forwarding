@@ -47,8 +47,8 @@ class TunnelClient:
             aws_socket.connect((self.aws_ip, self.aws_port))
             logger.debug("Connected to AWS server")
             
-            # Send target port as 4 bytes (big-endian)
-            port_bytes = self.minecraft_port.to_bytes(4, byteorder='big')
+            # Send target port as 4 bytes (little-endian)
+            port_bytes = self.minecraft_port.to_bytes(4, byteorder='little')
             aws_socket.send(port_bytes)
             
             # Set TCP_NODELAY to disable Nagle's algorithm

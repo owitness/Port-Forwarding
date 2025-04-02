@@ -24,3 +24,11 @@ PermissionError: [WinError 10013] An attempt was made to access a socket in a wa
 2025-04-02 15:57:32,586 - INFO - TunnelClient initialized: 3.145.64.97:25566 -> localhost:25565 (via 25567)
 2025-04-02 15:57:32,587 - INFO - Tunnel client running. Listening on localhost:25567
 2025-04-02 15:57:32,587 - INFO - Forwarding to 3.145.64.97:25566 -> localhost:25565
+2025-04-02 16:05:31,309 - INFO - TunnelClient initialized: 3.145.64.97:25566 -> localhost:25565 (via 25567)
+2025-04-02 16:05:31,310 - INFO - Tunnel client running. Listening on localhost:25567
+2025-04-02 16:05:31,310 - INFO - Forwarding to 3.145.64.97:25566 -> localhost:25565
+2025-04-02 16:08:13,568 - INFO - Received shutdown signal
+2025-04-02 16:08:13,568 - INFO - Stopping tunnel client...
+2025-04-02 16:08:13,568 - INFO - Tunnel client stopped
+2025-04-02 16:08:13,568 - INFO - Stopping tunnel client...
+2025-04-02 16:08:13,568 - INFO - Tunnel client stopped
