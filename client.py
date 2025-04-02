@@ -24,7 +24,7 @@ class TunnelClient:
     def __init__(self, aws_ip, aws_port, local_port):
         self.aws_ip = aws_ip
         self.aws_port = aws_port
-        self.local_port = local_port
+        self.local_port = local_port  # Port we listen on locally
         self.server_socket = None
         self.connection_state = "initialized"
         self.active_connections = 0
@@ -42,9 +42,6 @@ class TunnelClient:
             logger.debug(f"Connecting to AWS server at {self.aws_ip}:{self.aws_port}")
             aws_socket.connect((self.aws_ip, self.aws_port))
             logger.debug("Connected to AWS server")
-            
-            # Send target port to AWS server
-            aws_socket.send(str(self.local_port).zfill(4).encode())
             
             # Set TCP_NODELAY to disable Nagle's algorithm
             local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -125,7 +122,7 @@ class TunnelClient:
 @click.command()
 @click.option('--aws-ip', required=True, help='AWS EC2 instance public IP')
 @click.option('--aws-port', default=25566, help='Port on AWS instance')
-@click.option('--local-port', default=25565, help='Local server port')
+@click.option('--local-port', default=25567, help='Local port to listen on')
 def main(aws_ip, aws_port, local_port):
     """Run the tunnel client on your local machine"""
     # Load environment variables

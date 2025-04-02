@@ -1,0 +1,23 @@
+2025-04-02 15:47:21,487 - INFO - TunnelClient initialized: YOUR_AWS_IP:25566 -> localhost:25565
+2025-04-02 15:47:21,488 - ERROR - Failed to start client: [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions
+2025-04-02 15:47:21,489 - ERROR - Traceback: Traceback (most recent call last):
+  File "C:\Users\lilma\Desktop\COSC\Port Forwarding\client.py", line 90, in start
+    self.server_socket.bind(('127.0.0.1', self.local_port))
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions
+
+2025-04-02 15:47:21,489 - ERROR - Failed to start client
+2025-04-02 15:47:21,489 - INFO - Tunnel client stopped
+2025-04-02 15:47:59,668 - INFO - TunnelClient initialized: 3.145.64.97:25566 -> localhost:25565
+2025-04-02 15:47:59,669 - ERROR - Failed to start client: [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions
+2025-04-02 15:47:59,670 - ERROR - Traceback: Traceback (most recent call last):
+  File "C:\Users\lilma\Desktop\COSC\Port Forwarding\client.py", line 90, in start
+    self.server_socket.bind(('127.0.0.1', self.local_port))
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions
+
+2025-04-02 15:47:59,670 - ERROR - Failed to start client
+2025-04-02 15:47:59,670 - INFO - Tunnel client stopped
+2025-04-02 15:49:03,589 - INFO - TunnelClient initialized: 3.145.64.97:25566 -> localhost:25565 (via 25567)
+2025-04-02 15:49:03,590 - INFO - Tunnel client running. Listening on localhost:25567
+2025-04-02 15:49:03,590 - INFO - Forwarding to 3.145.64.97:25566 -> localhost:25565
