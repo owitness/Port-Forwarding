@@ -40,9 +40,6 @@ class TunnelServer:
                 self.active_connections += 1
             logger.debug(f"New Minecraft client connection from {client_addr} (Active connections: {self.active_connections})")
             
-            # Generate a unique connection ID
-            connection_id = f"{client_addr[0]}:{client_addr[1]}:{time.time()}"
-            
             # Check if we have a tunnel client for this port
             with self.connection_lock:
                 if target_port not in self.tunnel_clients:
@@ -53,55 +50,28 @@ class TunnelServer:
                 # Get the tunnel client connection
                 tunnel_socket, _ = self.tunnel_clients[target_port]
             
-            # Set TCP_NODELAY to disable Nagle's algorithm
-            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            
             # Signal to the tunnel client that we have a new connection
-            # Send a special byte to indicate a new connection, followed by the connection ID
-            # Format: 0x01 (new connection) + 16-byte connection ID
-            tunnel_socket.send(b'\x01' + connection_id.encode('utf-8'))
+            # Send a special byte to indicate a new connection
+            tunnel_socket.send(b'\x01')
             
             # Wait for minecraft data
             minecraft_data = b''
-            while True:
-                try:
-                    client_socket.settimeout(5)
-                    data = client_socket.recv(4096)
-                    if not data:
-                        break
-                    logger.debug(f"Forwarding {len(data)} bytes from Minecraft client to tunnel")
+            try:
+                client_socket.settimeout(5)
+                data = client_socket.recv(4096)
+                if data:
+                    logger.debug(f"Received {len(data)} bytes from Minecraft client")
                     minecraft_data += data
-                except socket.timeout:
-                    break
-                except Exception as e:
-                    logger.error(f"Error receiving Minecraft data: {str(e)}")
-                    break
+            except socket.timeout:
+                logger.debug("Timeout waiting for Minecraft client data")
+            except Exception as e:
+                logger.error(f"Error receiving Minecraft data: {str(e)}")
             
-            # Keep the socket open until the tunnel client connects back with a data connection
-            time.sleep(1)  # Give the tunnel client time to connect
-            
-            # Store the client and its data in a queue for the tunnel client to pick up
+            # Store the client socket for later use
             with self.connection_lock:
-                self.minecraft_clients[connection_id] = (client_socket, minecraft_data)
+                self.minecraft_clients["pending"] = (client_socket, minecraft_data)
             
-            # Wait for the connection to be picked up or timeout
-            wait_start = time.time()
-            while time.time() - wait_start < 30:  # 30 second timeout
-                with self.connection_lock:
-                    if connection_id not in self.minecraft_clients:
-                        # The connection was picked up
-                        return
-                time.sleep(0.5)
-                
-            # Timeout - clean up
-            logger.error(f"Timeout waiting for data connection to pick up Minecraft client {connection_id}")
-            with self.connection_lock:
-                if connection_id in self.minecraft_clients:
-                    client_socket, _ = self.minecraft_clients.pop(connection_id)
-                    try:
-                        client_socket.close()
-                    except:
-                        pass
+            logger.debug("Waiting for data connection from tunnel client")
             
         except Exception as e:
             logger.error(f"Error handling Minecraft client: {str(e)}")
@@ -111,26 +81,24 @@ class TunnelServer:
             except:
                 pass
         finally:
-            with self.connection_lock:
-                self.active_connections -= 1
-            logger.debug(f"Minecraft client handler exited. Active connections: {self.active_connections}")
-
-    def handle_data_connection(self, client_socket, client_addr, connection_id):
+            pass  # Don't decrement connection count here
+            
+    def handle_data_connection(self, client_socket, client_addr):
         """Handle data connections from the tunnel client"""
         try:
-            logger.debug(f"Handling data connection from {client_addr} for connection {connection_id}")
+            logger.debug(f"Handling data connection from {client_addr}")
             
-            # Find the waiting Minecraft client
+            # Get the waiting Minecraft client
             with self.connection_lock:
-                if connection_id not in self.minecraft_clients:
-                    logger.error(f"No waiting Minecraft client with ID {connection_id}")
+                if "pending" not in self.minecraft_clients:
+                    logger.error("No waiting Minecraft client")
                     client_socket.close()
                     return
                 
                 # Get the waiting client
-                minecraft_socket, minecraft_data = self.minecraft_clients.pop(connection_id)
+                minecraft_socket, minecraft_data = self.minecraft_clients.pop("pending")
             
-            logger.debug(f"Pairing data connection with Minecraft client {connection_id}")
+            logger.debug(f"Pairing data connection with waiting Minecraft client")
             
             # Send the stored Minecraft data to the tunnel client
             if minecraft_data:
@@ -150,12 +118,10 @@ class TunnelServer:
                             logger.debug(f"Forwarding {len(data)} bytes {direction}")
                             destination.send(data)
                         except socket.timeout:
-                            # Send a heartbeat
                             try:
-                                if direction == "client->target":
-                                    # Only send heartbeats in one direction to avoid loops
-                                    logger.debug("Sending heartbeat")
-                                    destination.send(b'\x00')
+                                # Send heartbeat
+                                source.send(b'\x00')
+                                logger.debug(f"Sent heartbeat ({direction})")
                             except:
                                 break
                         except Exception as e:
@@ -172,10 +138,9 @@ class TunnelServer:
                         destination.close()
                     except:
                         pass
-                    logger.debug(f"Forwarding thread {direction} stopped")
                     with self.connection_lock:
                         self.active_connections -= 1
-                    logger.debug(f"Connection closed. Active connections: {self.active_connections}")
+                    logger.debug(f"Forwarding thread {direction} stopped. Active connections: {self.active_connections}")
             
             # Start bidirectional forwarding
             with self.connection_lock:
@@ -296,18 +261,9 @@ class TunnelServer:
                             # Read the identifier byte to remove it from the buffer
                             client_socket.recv(1)
                             
-                            # Read the connection ID
-                            try:
-                                connection_id_bytes = client_socket.recv(36)  # Should be a string like 192.168.1.1:12345:1680123456.789
-                                connection_id = connection_id_bytes.decode('utf-8')
-                                logger.debug(f"Data connection for ID: {connection_id}")
-                                
-                                # Call the handler for data connections
-                                threading.Thread(target=self.handle_data_connection, 
-                                                args=(client_socket, client_addr, connection_id)).start()
-                            except Exception as e:
-                                logger.error(f"Error reading connection ID: {str(e)}")
-                                client_socket.close()
+                            # Handle the data connection
+                            threading.Thread(target=self.handle_data_connection, 
+                                           args=(client_socket, client_addr)).start()
                         # Minecraft protocol has a specific format for the first byte
                         # Tunnel clients will send 4 bytes for the port
                         # For now, we'll use a simple heuristic: check if it's a valid ASCII character
