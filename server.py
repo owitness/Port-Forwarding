@@ -20,39 +20,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class TCPTunnel:
-    def __init__(self, aws_ip, local_port, remote_port):
-        self.aws_ip = aws_ip
-        self.local_port = local_port
-        self.remote_port = remote_port
+class TunnelServer:
+    def __init__(self, port):
+        self.port = port
         self.server_socket = None
         self.connection_state = "initialized"
         self.active_connections = 0
-        logger.info(f"TCPTunnel initialized with local_port={local_port}, remote_port={remote_port}")
-
-    def test_local_connection(self):
-        """Test if we can connect to the local server"""
-        try:
-            logger.debug(f"Testing local connection to 127.0.0.1:{self.local_port}")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            logger.debug("Created test socket")
-            
-            result = sock.connect_ex(('127.0.0.1', self.local_port))
-            logger.debug(f"Connection test result: {result}")
-            
-            sock.close()
-            
-            if result == 0:
-                logger.info(f"Successfully connected to local server on port {self.local_port}")
-                return True
-            else:
-                logger.error(f"Failed to connect to local server. Error code: {result}")
-                return False
-        except Exception as e:
-            logger.error(f"Error testing local connection: {str(e)}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return False
+        logger.info(f"TunnelServer initialized on port {port}")
 
     def handle_client(self, client_socket, client_addr):
         """Handle individual client connections"""
@@ -60,16 +34,20 @@ class TCPTunnel:
             self.active_connections += 1
             logger.debug(f"New connection from {client_addr} (Active connections: {self.active_connections})")
             
-            # Create connection to local server
-            local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            local_socket.settimeout(60)
-            logger.debug(f"Connecting to local server at 127.0.0.1:{self.local_port}")
-            local_socket.connect(('127.0.0.1', self.local_port))
-            logger.debug("Connected to local server")
+            # Wait for the client to send the target port
+            target_port = int(client_socket.recv(4).decode())
+            logger.debug(f"Client requested connection to port {target_port}")
+            
+            # Create connection to target port
+            target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            target_socket.settimeout(60)
+            logger.debug(f"Connecting to target port {target_port}")
+            target_socket.connect(('127.0.0.1', target_port))
+            logger.debug("Connected to target port")
             
             # Set TCP_NODELAY to disable Nagle's algorithm
             client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            target_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             
             # Create bidirectional pipe
             def forward(source, destination, direction):
@@ -90,8 +68,8 @@ class TCPTunnel:
                         pass
             
             # Start bidirectional forwarding
-            threading.Thread(target=forward, args=(client_socket, local_socket, "client->local")).start()
-            threading.Thread(target=forward, args=(local_socket, client_socket, "local->client")).start()
+            threading.Thread(target=forward, args=(client_socket, target_socket, "client->target")).start()
+            threading.Thread(target=forward, args=(target_socket, client_socket, "target->client")).start()
             
         except Exception as e:
             logger.error(f"Error handling client: {str(e)}")
@@ -101,25 +79,18 @@ class TCPTunnel:
             logger.debug(f"Client connection closed. Active connections: {self.active_connections}")
 
     def start(self):
-        """Start the TCP tunnel server"""
+        """Start the tunnel server"""
         try:
             self.connection_state = "starting"
-            
-            # Test local connection first
-            if not self.test_local_connection():
-                logger.error("Cannot proceed - local server is not accessible")
-                self.connection_state = "local_connection_failed"
-                return False
             
             # Create server socket
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind(('0.0.0.0', self.remote_port))
+            self.server_socket.bind(('0.0.0.0', self.port))
             self.server_socket.listen(5)
             
             self.connection_state = "running"
-            logger.info(f"TCP tunnel server running on {self.aws_ip}:{self.remote_port}")
-            logger.info(f"Forwarding to localhost:{self.local_port}")
+            logger.info(f"Tunnel server running on port {self.port}")
             
             # Accept connections
             while self.connection_state == "running":
@@ -134,12 +105,12 @@ class TCPTunnel:
             return True
         except Exception as e:
             self.connection_state = "failed"
-            logger.error(f"Failed to start tunnel: {str(e)}")
+            logger.error(f"Failed to start server: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
     def stop(self):
-        """Stop the TCP tunnel server"""
+        """Stop the tunnel server"""
         self.connection_state = "stopping"
         if self.server_socket:
             try:
@@ -147,49 +118,43 @@ class TCPTunnel:
             except:
                 pass
         self.connection_state = "stopped"
-        logger.info("TCP tunnel server stopped")
+        logger.info("Tunnel server stopped")
 
 @click.command()
-@click.option('--aws-ip', required=True, help='AWS EC2 instance public IP')
-@click.option('--local-port', default=25565, help='Local server port')
-@click.option('--remote-port', default=25565, help='Remote port on AWS instance')
-def main(aws_ip, local_port, remote_port):
-    """Set up a TCP tunnel for any local server"""
+@click.option('--port', default=25566, help='Port to listen on')
+def main(port):
+    """Run the tunnel server on AWS"""
     # Load environment variables
     load_dotenv()
 
-    # Create and configure tunnel
-    tunnel = TCPTunnel(
-        aws_ip=aws_ip,
-        local_port=local_port,
-        remote_port=remote_port
-    )
+    # Create and configure server
+    server = TunnelServer(port=port)
 
     try:
-        # Start the tunnel
-        if not tunnel.start():
-            logger.error("Failed to start tunnel")
+        # Start the server
+        if not server.start():
+            logger.error("Failed to start server")
             sys.exit(1)
 
-        logger.info(f"Tunnel is active. Local server is accessible at {aws_ip}:{remote_port}")
-        logger.info("Press Ctrl+C to stop the tunnel")
+        logger.info(f"Server is running on port {port}")
+        logger.info("Press Ctrl+C to stop the server")
 
-        # Keep the tunnel running and monitor connection state
+        # Keep the server running and monitor connection state
         while True:
             time.sleep(1)
-            if tunnel.connection_state != "running":
-                logger.error(f"Connection state changed to: {tunnel.connection_state}")
+            if server.connection_state != "running":
+                logger.error(f"Connection state changed to: {server.connection_state}")
                 break
-            if tunnel.active_connections > 0:
-                logger.debug(f"Active connections: {tunnel.active_connections}")
+            if server.active_connections > 0:
+                logger.debug(f"Active connections: {server.active_connections}")
 
     except KeyboardInterrupt:
-        logger.info("Shutting down tunnel...")
+        logger.info("Shutting down server...")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
     finally:
-        tunnel.stop()
+        server.stop()
 
 if __name__ == '__main__':
     main()
