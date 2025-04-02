@@ -1,79 +1,104 @@
-# Minecraft Server Port Forwarding
+# Minecraft Port Forwarding Solution
 
-A Python-based command-line tool that sets up a reverse SSH tunnel between your local Minecraft server and an AWS EC2 instance, enabling external access without using ngrok.
+A Python-based solution for exposing a locally hosted Minecraft server to the internet when behind a NAT/firewall, without requiring port forwarding on your home router.
 
-## Prerequisites
+## Overview
 
-- Python 3.x installed on your local machine
-- An AWS EC2 instance with a public IP
-- SSH key pair for AWS instance authentication
-- Minecraft server running locally
+This application creates a TCP tunnel between your local Minecraft server and an AWS EC2 instance, allowing players to connect to your Minecraft server through the public IP address of your EC2 instance.
 
-## AWS EC2 Setup
+Key features:
+- Bypasses the need for port forwarding on your home router
+- Simple client-server architecture
+- Minimizes latency by using direct TCP forwarding
+- Maintains persistent connections with heartbeats
+- Handles multiple simultaneous player connections
 
-1. Ensure your EC2 instance has the following security group rules:
-   - Allow incoming traffic on port 25565 (or your chosen Minecraft port)
-   - Allow SSH (port 22) for establishing the reverse tunnel
+## Requirements
 
-2. Make sure your EC2 instance's SSH server is configured to permit TCP port forwarding.
+- Python 3.6 or higher
+- AWS EC2 instance with a public IP
+- Running Minecraft server on your local machine
 
 ## Installation
 
-1. Clone this repository:
-```bash
-git clone <repository-url>
-cd <repository-directory>
+### On Your Local Machine
+
+1. Clone the repository:
+```
+git clone https://github.com/yourusername/minecraft-port-forwarding.git
+cd minecraft-port-forwarding
 ```
 
-2. Install the required dependencies:
-```bash
+2. Install dependencies:
+```
+pip install -r requirements.txt
+```
+
+### On Your AWS EC2 Instance
+
+1. Clone the repository:
+```
+git clone https://github.com/yourusername/minecraft-port-forwarding.git
+cd minecraft-port-forwarding
+```
+
+2. Install dependencies:
+```
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-Run the script with the required parameters:
+### On Your AWS EC2 Instance
 
-```bash
-python server.py --aws-ip YOUR_AWS_IP --ssh-key-path /path/to/your/key.pem
+1. Run the server:
+```
+python server.py --port 25566
 ```
 
-Optional parameters:
-- `--aws-username`: AWS instance SSH username (default: ec2-user)
-- `--local-port`: Local Minecraft server port (default: 25565)
-- `--remote-port`: Remote port on AWS instance (default: 25565)
+This starts the server component that listens for incoming connections on port 25566.
 
-Example with all parameters:
-```bash
-python server.py \
-    --aws-ip 54.123.45.67 \
-    --aws-username ec2-user \
-    --ssh-key-path ~/.ssh/my-key.pem \
-    --local-port 25565 \
-    --remote-port 25565
+### On Your Local Machine
+
+1. Start your Minecraft server (typically on port 25565).
+
+2. Run the client, replacing `your-aws-ip` with your EC2 instance's public IP:
+```
+python client.py --aws-ip your-aws-ip --aws-port 25566 --minecraft-port 25565
+```
+
+### Connecting to the Server
+
+Players can connect to your Minecraft server using:
+```
+your-aws-ip:25566
 ```
 
 ## How It Works
 
-1. The script establishes an SSH connection to your AWS EC2 instance
-2. It sets up a reverse tunnel that forwards traffic from the AWS instance's public port to your local Minecraft server
-3. External players can now connect to your Minecraft server using the AWS instance's public IP and port
+1. The client (on your local machine) connects to the server component on your AWS EC2 instance.
+2. When a Minecraft player connects to your AWS EC2 instance, the server notifies the client.
+3. The client creates a new connection to the AWS server for data transfer.
+4. Data is forwarded bidirectionally between the player and your local Minecraft server.
 
 ## Security Considerations
 
-- Keep your SSH private key secure and never share it
-- Regularly update your AWS security group rules
-- Monitor your AWS instance for any suspicious activity
-- Consider implementing additional security measures like firewall rules
+- This application does not include authentication mechanisms - anyone can connect to your Minecraft server if they know the AWS IP address
+- The traffic is not encrypted - consider using this in conjunction with a VPN if security is a concern
+- Ensure your EC2 security group only allows necessary ports
 
 ## Troubleshooting
 
-1. Connection Issues:
-   - Verify your AWS instance is running
-   - Check security group rules
-   - Ensure your SSH key has the correct permissions (chmod 600)
+Common issues:
 
-2. Port Forwarding Issues:
-   - Verify the ports are not in use
-   - Check if your local Minecraft server is running
-   - Ensure the AWS instance's SSH server allows port forwarding
+1. **Connection timeouts**: Ensure your Minecraft server is running and accessible on localhost.
+2. **EC2 connectivity issues**: Check that port 25566 is allowed in your EC2 instance's security group.
+3. **"Connection refused"**: Make sure the server component is running on your EC2 instance.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+This solution was built as an alternative to ngrok or SSH port forwarding for Minecraft servers.

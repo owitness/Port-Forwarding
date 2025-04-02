@@ -12,7 +12,7 @@ import queue
 
 # Configure logging with more detail
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # Change to INFO level to reduce verbosity
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -20,6 +20,10 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Create a separate logger for data forwarding that will be less verbose
+data_logger = logging.getLogger("data_forwarding")
+data_logger.setLevel(logging.DEBUG)  # Keep this at DEBUG but we'll rarely use it
 
 class TunnelServer:
     def __init__(self, port):
@@ -38,7 +42,7 @@ class TunnelServer:
         try:
             with self.connection_lock:
                 self.active_connections += 1
-            logger.debug(f"New Minecraft client connection from {client_addr} (Active connections: {self.active_connections})")
+            logger.info(f"New Minecraft client connection (Active connections: {self.active_connections})")
             
             # Check if we have a tunnel client for this port
             with self.connection_lock:
@@ -49,7 +53,7 @@ class TunnelServer:
                 
                 # Get the tunnel client connection
                 tunnel_socket, _ = self.tunnel_clients[target_port]
-            
+                
             # Signal to the tunnel client that we have a new connection
             # Send a special byte to indicate a new connection
             tunnel_socket.send(b'\x01')
@@ -60,10 +64,10 @@ class TunnelServer:
                 client_socket.settimeout(5)
                 data = client_socket.recv(4096)
                 if data:
-                    logger.debug(f"Received {len(data)} bytes from Minecraft client")
+                    data_logger.debug(f"Received {len(data)} bytes from Minecraft client")
                     minecraft_data += data
             except socket.timeout:
-                logger.debug("Timeout waiting for Minecraft client data")
+                data_logger.debug("Timeout waiting for Minecraft client data")
             except Exception as e:
                 logger.error(f"Error receiving Minecraft data: {str(e)}")
             
@@ -80,6 +84,9 @@ class TunnelServer:
                 client_socket.close()
             except:
                 pass
+            with self.connection_lock:
+                self.active_connections -= 1
+                logger.info(f"Connection error (Active connections: {self.active_connections})")
         finally:
             pass  # Don't decrement connection count here
             
@@ -103,25 +110,36 @@ class TunnelServer:
             # Send the stored Minecraft data to the tunnel client
             if minecraft_data:
                 client_socket.send(minecraft_data)
-                logger.debug(f"Forwarded {len(minecraft_data)} bytes of initial Minecraft data")
+                data_logger.debug(f"Forwarded {len(minecraft_data)} bytes of initial Minecraft data")
             
             # Now set up bidirectional forwarding
             def forward(source, destination, direction):
                 try:
+                    bytes_forwarded = 0
+                    last_log_time = time.time()
+                    
                     while True:
                         try:
                             source.settimeout(300)  # 5 minute timeout
                             data = source.recv(4096)
                             if not data:
-                                logger.debug(f"Connection closed ({direction})")
+                                data_logger.debug(f"Connection closed ({direction})")
                                 break
-                            logger.debug(f"Forwarding {len(data)} bytes {direction}")
+                                
+                            bytes_forwarded += len(data)
+                            # Only log forwarding activity once per minute to reduce spam
+                            current_time = time.time()
+                            if current_time - last_log_time > 60:
+                                data_logger.debug(f"Forwarded {bytes_forwarded} bytes {direction} in the last minute")
+                                bytes_forwarded = 0
+                                last_log_time = current_time
+                                
                             destination.send(data)
                         except socket.timeout:
                             try:
                                 # Send heartbeat
                                 source.send(b'\x00')
-                                logger.debug(f"Sent heartbeat ({direction})")
+                                data_logger.debug(f"Sent heartbeat ({direction})")
                             except:
                                 break
                         except Exception as e:
@@ -140,15 +158,14 @@ class TunnelServer:
                         pass
                     with self.connection_lock:
                         self.active_connections -= 1
-                    logger.debug(f"Forwarding thread {direction} stopped. Active connections: {self.active_connections}")
+                        logger.info(f"Connection closed (Active connections: {self.active_connections})")
             
             # Start bidirectional forwarding
             with self.connection_lock:
                 self.active_connections += 1
+                logger.info(f"Starting forwarding (Active connections: {self.active_connections})")
+                
             threading.Thread(target=forward, args=(minecraft_socket, client_socket, "client->target")).start()
-            
-            with self.connection_lock:
-                self.active_connections += 1
             threading.Thread(target=forward, args=(client_socket, minecraft_socket, "target->client")).start()
             
         except Exception as e:
@@ -156,7 +173,7 @@ class TunnelServer:
             logger.error(f"Traceback: {traceback.format_exc()}")
             with self.connection_lock:
                 self.active_connections -= 1
-            logger.debug(f"Data connection handler exited. Active connections: {self.active_connections}")
+                logger.info(f"Connection error (Active connections: {self.active_connections})")
 
     def handle_tunnel_client(self, client_socket, client_addr):
         """Handle connections from the tunnel client"""
@@ -336,13 +353,17 @@ def main(port):
         logger.info("Press Ctrl+C to stop the server")
 
         # Keep the server running and monitor connection state
+        prev_connections = 0
         while True:
             time.sleep(1)
             if server.connection_state != "running":
                 logger.error(f"Connection state changed to: {server.connection_state}")
                 break
-            if server.active_connections > 0:
-                logger.debug(f"Active connections: {server.active_connections}")
+                
+            # Only log when the number of connections changes
+            if server.active_connections != prev_connections:
+                logger.info(f"Active connections: {server.active_connections}")
+                prev_connections = server.active_connections
 
     except KeyboardInterrupt:
         logger.info("Shutting down server...")

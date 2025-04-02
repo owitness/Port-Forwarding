@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 # Configure logging with more detail
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # Change to INFO level to reduce verbosity
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -20,6 +20,10 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Create a separate logger for data forwarding that will be less verbose
+data_logger = logging.getLogger("data_forwarding")
+data_logger.setLevel(logging.DEBUG)  # Keep this at DEBUG but we'll rarely use it
 
 class TunnelClient:
     def __init__(self, aws_ip, aws_port, minecraft_port):
@@ -37,7 +41,7 @@ class TunnelClient:
         """Handle a new Minecraft connection from the AWS server"""
         try:
             self.active_connections += 1
-            logger.debug(f"New Minecraft connection request (Active connections: {self.active_connections})")
+            logger.info(f"New Minecraft connection request (Active connections: {self.active_connections})")
             
             # Connect to local Minecraft server
             minecraft_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -49,6 +53,8 @@ class TunnelClient:
             except Exception as e:
                 logger.error(f"Failed to connect to Minecraft server: {str(e)}")
                 aws_data_socket.close()
+                self.active_connections -= 1
+                logger.info(f"Connection failed (Active connections: {self.active_connections})")
                 return
             
             # Set TCP_NODELAY to disable Nagle's algorithm
@@ -59,13 +65,24 @@ class TunnelClient:
             def forward(source, destination, direction):
                 try:
                     source.settimeout(60)  # 1 minute timeout
+                    bytes_forwarded = 0
+                    last_log_time = time.time()
+                    
                     while not self._stop_event.is_set():
                         try:
                             data = source.recv(4096)
                             if not data:
-                                logger.debug(f"Connection closed in {direction}")
+                                data_logger.debug(f"Connection closed in {direction}")
                                 break
-                            logger.debug(f"Forwarding {len(data)} bytes {direction}")
+                                
+                            bytes_forwarded += len(data)
+                            # Only log forwarding activity once per minute to reduce spam
+                            current_time = time.time()
+                            if current_time - last_log_time > 60:
+                                data_logger.debug(f"Forwarded {bytes_forwarded} bytes {direction} in the last minute")
+                                bytes_forwarded = 0
+                                last_log_time = current_time
+                                
                             destination.sendall(data)  # Use sendall to ensure all data is sent
                         except socket.timeout:
                             # Just continue on timeout
@@ -117,7 +134,7 @@ class TunnelClient:
             except:
                 pass
             self.active_connections -= 1
-            logger.debug(f"Minecraft connection closed. Active connections: {self.active_connections}")
+            logger.info(f"Minecraft connection closed (Active connections: {self.active_connections})")
 
     def maintain_tunnel(self):
         """Maintain the tunnel connection to the AWS server"""
@@ -271,13 +288,17 @@ def main(aws_ip, aws_port, minecraft_port):
         logger.info("Press Ctrl+C to stop the client")
 
         # Keep the client running and monitor connection state
+        prev_connections = 0
         while not client._stop_event.is_set():
             time.sleep(1)
             if client.connection_state != "running":
                 logger.error(f"Connection state changed to: {client.connection_state}")
                 break
-            if client.active_connections > 0:
-                logger.debug(f"Active connections: {client.active_connections}")
+                
+            # Only log when the number of connections changes
+            if client.active_connections != prev_connections:
+                logger.info(f"Active connections: {client.active_connections}")
+                prev_connections = client.active_connections
 
     except KeyboardInterrupt:
         logger.info("Shutting down client...")
