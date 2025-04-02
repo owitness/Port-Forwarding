@@ -40,3 +40,197 @@ PermissionError: [WinError 10013] An attempt was made to access a socket in a wa
 2025-04-02 16:15:30,404 - INFO - Tunnel client stopped
 2025-04-02 16:15:30,404 - INFO - Stopping tunnel client...
 2025-04-02 16:15:30,404 - INFO - Tunnel client stopped
+2025-04-02 16:20:41,806 - INFO - TunnelClient initialized: 3.145.64.97:25566 -> localhost:25565
+2025-04-02 16:20:41,807 - INFO - Tunnel client running. Connected to 3.145.64.97:25566
+2025-04-02 16:20:41,807 - INFO - Forwarding connections to localhost:25565
+2025-04-02 16:20:41,807 - INFO - Client is running. Tunneling 3.145.64.97:25566 -> localhost:25565
+2025-04-02 16:20:41,807 - INFO - Press Ctrl+C to stop the client
+2025-04-02 16:20:41,808 - DEBUG - Connecting to AWS server at 3.145.64.97:25566
+2025-04-02 16:20:41,859 - DEBUG - Connected to AWS server
+2025-04-02 16:20:41,860 - DEBUG - Sending minecraft port 25565 as bytes: dd630000
+2025-04-02 16:20:41,860 - DEBUG - Individual bytes: [221, 99, 0, 0]
+2025-04-02 16:20:41,860 - DEBUG - Sent 4 bytes
+2025-04-02 16:21:00,699 - DEBUG - Received new connection signal from AWS
+2025-04-02 16:21:00,752 - DEBUG - New Minecraft connection request (Active connections: 1)
+2025-04-02 16:21:00,752 - WARNING - Received unknown signal from AWS: 36
+2025-04-02 16:21:00,752 - DEBUG - Connecting to Minecraft server at localhost:25565
+2025-04-02 16:21:00,752 - DEBUG - Received heartbeat from AWS
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 82
+2025-04-02 16:21:00,753 - DEBUG - Connected to Minecraft server
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 06
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 2f
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:00,753 - DEBUG - Minecraft connection closed. Active connections: 0
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 32
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,753 - WARNING - Received unknown signal from AWS: 33
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 31
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 34
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 35
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 36
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 34
+2025-04-02 16:21:00,754 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,755 - WARNING - Received unknown signal from AWS: 39
+2025-04-02 16:21:00,755 - WARNING - Received unknown signal from AWS: 37
+2025-04-02 16:21:00,756 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:00,756 - WARNING - Received unknown signal from AWS: 75
+2025-04-02 16:21:00,757 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:00,757 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,758 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:00,758 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:00,759 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:00,761 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:00,761 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:00,762 - WARNING - Received unknown signal from AWS: 32
+2025-04-02 16:21:00,762 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:00,763 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:00,766 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:00,766 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:00,768 - WARNING - Received unknown signal from AWS: 70
+2025-04-02 16:21:00,769 - WARNING - Received unknown signal from AWS: 75
+2025-04-02 16:21:00,769 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:00,776 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:00,777 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:00,779 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:00,780 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:00,781 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:00,782 - WARNING - Received unknown signal from AWS: 7a
+2025-04-02 16:21:00,782 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:00,783 - WARNING - Received unknown signal from AWS: 6e
+2025-04-02 16:21:00,783 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:00,784 - WARNING - Received unknown signal from AWS: 77
+2025-04-02 16:21:00,785 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:00,785 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:00,792 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:00,792 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:00,793 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:00,794 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:00,794 - WARNING - Received unknown signal from AWS: de
+2025-04-02 16:21:00,795 - WARNING - Received unknown signal from AWS: 02
+2025-04-02 16:21:00,796 - WARNING - Received unknown signal from AWS: 1a
+2025-04-02 16:21:00,799 - DEBUG - Received heartbeat from AWS
+2025-04-02 16:21:00,799 - WARNING - Received unknown signal from AWS: 08
+2025-04-02 16:21:00,800 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:00,800 - WARNING - Received unknown signal from AWS: 57
+2025-04-02 16:21:00,801 - WARNING - Received unknown signal from AWS: 69
+2025-04-02 16:21:00,804 - ERROR - Error in minecraft->aws forwarding: [WinError 10038] An operation was attempted on something that is not a socket
+2025-04-02 16:21:00,806 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:00,810 - WARNING - Received unknown signal from AWS: 6e
+2025-04-02 16:21:00,811 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:00,812 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:00,816 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:00,816 - WARNING - Received unknown signal from AWS: 79
+2025-04-02 16:21:00,817 - WARNING - Received unknown signal from AWS: d8
+2025-04-02 16:21:00,818 - WARNING - Received unknown signal from AWS: e2
+2025-04-02 16:21:00,818 - WARNING - Received unknown signal from AWS: b8
+2025-04-02 16:21:00,819 - WARNING - Received unknown signal from AWS: 56
+2025-04-02 16:21:00,819 - WARNING - Received unknown signal from AWS: cc
+2025-04-02 16:21:00,825 - WARNING - Received unknown signal from AWS: 47
+2025-04-02 16:21:00,825 - WARNING - Received unknown signal from AWS: c8
+2025-04-02 16:21:00,826 - WARNING - Received unknown signal from AWS: b0
+2025-04-02 16:21:00,827 - WARNING - Received unknown signal from AWS: 7b
+2025-04-02 16:21:00,829 - WARNING - Received unknown signal from AWS: da
+2025-04-02 16:21:00,829 - WARNING - Received unknown signal from AWS: 8f
+2025-04-02 16:21:00,830 - WARNING - Received unknown signal from AWS: ba
+2025-04-02 16:21:00,830 - WARNING - Received unknown signal from AWS: b7
+2025-04-02 16:21:00,831 - WARNING - Received unknown signal from AWS: 39
+2025-04-02 16:21:00,831 - WARNING - Received unknown signal from AWS: e9
+2025-04-02 16:21:11,825 - DEBUG - Received new connection signal from AWS
+2025-04-02 16:21:11,878 - DEBUG - New Minecraft connection request (Active connections: 1)
+2025-04-02 16:21:11,878 - WARNING - Received unknown signal from AWS: 36
+2025-04-02 16:21:11,878 - DEBUG - Connecting to Minecraft server at localhost:25565
+2025-04-02 16:21:11,882 - DEBUG - Received heartbeat from AWS
+2025-04-02 16:21:11,882 - DEBUG - Connected to Minecraft server
+2025-04-02 16:21:11,883 - WARNING - Received unknown signal from AWS: 82
+2025-04-02 16:21:11,884 - WARNING - Received unknown signal from AWS: 06
+2025-04-02 16:21:11,885 - DEBUG - Minecraft connection closed. Active connections: 0
+2025-04-02 16:21:11,885 - WARNING - Received unknown signal from AWS: 2f
+2025-04-02 16:21:11,886 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:11,889 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:11,890 - WARNING - Received unknown signal from AWS: 32
+2025-04-02 16:21:11,895 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,895 - WARNING - Received unknown signal from AWS: 33
+2025-04-02 16:21:11,896 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,896 - WARNING - Received unknown signal from AWS: 31
+2025-04-02 16:21:11,897 - WARNING - Received unknown signal from AWS: 34
+2025-04-02 16:21:11,899 - WARNING - Received unknown signal from AWS: 35
+2025-04-02 16:21:11,899 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,901 - WARNING - Received unknown signal from AWS: 36
+2025-04-02 16:21:11,901 - WARNING - Received unknown signal from AWS: 34
+2025-04-02 16:21:11,902 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,902 - WARNING - Received unknown signal from AWS: 39
+2025-04-02 16:21:11,903 - WARNING - Received unknown signal from AWS: 37
+2025-04-02 16:21:11,903 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:11,904 - WARNING - Received unknown signal from AWS: 75
+2025-04-02 16:21:11,909 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:11,909 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,912 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:11,912 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:11,913 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:11,913 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:11,915 - WARNING - Received unknown signal from AWS: 2d
+2025-04-02 16:21:11,917 - WARNING - Received unknown signal from AWS: 32
+2025-04-02 16:21:11,918 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:11,919 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:11,920 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:11,920 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:11,921 - WARNING - Received unknown signal from AWS: 70
+2025-04-02 16:21:11,921 - WARNING - Received unknown signal from AWS: 75
+2025-04-02 16:21:11,922 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:11,923 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:11,928 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:11,928 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:11,931 - ERROR - Error in minecraft->aws forwarding: [WinError 10038] An operation was attempted on something that is not a socket
+2025-04-02 16:21:11,931 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:11,935 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:11,935 - WARNING - Received unknown signal from AWS: 7a
+2025-04-02 16:21:11,937 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:11,938 - WARNING - Received unknown signal from AWS: 6e
+2025-04-02 16:21:11,939 - WARNING - Received unknown signal from AWS: 61
+2025-04-02 16:21:11,939 - WARNING - Received unknown signal from AWS: 77
+2025-04-02 16:21:11,940 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:11,945 - WARNING - Received unknown signal from AWS: 2e
+2025-04-02 16:21:11,947 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:11,948 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:11,950 - WARNING - Received unknown signal from AWS: 6d
+2025-04-02 16:21:11,950 - WARNING - Received unknown signal from AWS: 63
+2025-04-02 16:21:11,951 - WARNING - Received unknown signal from AWS: de
+2025-04-02 16:21:11,951 - WARNING - Received unknown signal from AWS: 02
+2025-04-02 16:21:11,952 - WARNING - Received unknown signal from AWS: 1a
+2025-04-02 16:21:11,952 - DEBUG - Received heartbeat from AWS
+2025-04-02 16:21:11,955 - WARNING - Received unknown signal from AWS: 08
+2025-04-02 16:21:11,955 - WARNING - Received unknown signal from AWS: 6f
+2025-04-02 16:21:11,956 - WARNING - Received unknown signal from AWS: 57
+2025-04-02 16:21:11,957 - WARNING - Received unknown signal from AWS: 69
+2025-04-02 16:21:11,959 - WARNING - Received unknown signal from AWS: 74
+2025-04-02 16:21:11,960 - WARNING - Received unknown signal from AWS: 6e
+2025-04-02 16:21:11,961 - WARNING - Received unknown signal from AWS: 65
+2025-04-02 16:21:11,963 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:11,964 - WARNING - Received unknown signal from AWS: 73
+2025-04-02 16:21:11,965 - WARNING - Received unknown signal from AWS: 79
+2025-04-02 16:21:11,968 - WARNING - Received unknown signal from AWS: d8
+2025-04-02 16:21:11,968 - WARNING - Received unknown signal from AWS: e2
+2025-04-02 16:21:11,969 - WARNING - Received unknown signal from AWS: b8
+2025-04-02 16:21:11,969 - WARNING - Received unknown signal from AWS: 56
+2025-04-02 16:21:11,970 - WARNING - Received unknown signal from AWS: cc
+2025-04-02 16:21:11,970 - WARNING - Received unknown signal from AWS: 47
+2025-04-02 16:21:11,971 - WARNING - Received unknown signal from AWS: c8
+2025-04-02 16:21:11,973 - WARNING - Received unknown signal from AWS: b0
+2025-04-02 16:21:11,973 - WARNING - Received unknown signal from AWS: 7b
+2025-04-02 16:21:11,977 - WARNING - Received unknown signal from AWS: da
+2025-04-02 16:21:11,977 - WARNING - Received unknown signal from AWS: 8f
+2025-04-02 16:21:11,979 - WARNING - Received unknown signal from AWS: ba
+2025-04-02 16:21:11,980 - WARNING - Received unknown signal from AWS: b7
+2025-04-02 16:21:11,981 - WARNING - Received unknown signal from AWS: 39
+2025-04-02 16:21:11,981 - WARNING - Received unknown signal from AWS: e9
+2025-04-02 16:21:11,982 - DEBUG - Received heartbeat from AWS
+2025-04-02 16:21:41,972 - ERROR - AWS server closed the connection
+2025-04-02 16:21:41,973 - INFO - Tunnel maintenance thread stopping
+2025-04-02 16:23:20,426 - INFO - Received shutdown signal
+2025-04-02 16:23:20,426 - INFO - Stopping tunnel client...
+2025-04-02 16:23:20,429 - INFO - Tunnel client stopped
+2025-04-02 16:23:20,430 - INFO - Stopping tunnel client...
+2025-04-02 16:23:20,430 - INFO - Tunnel client stopped

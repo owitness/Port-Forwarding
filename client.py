@@ -48,6 +48,7 @@ class TunnelClient:
                 logger.debug("Connected to Minecraft server")
             except Exception as e:
                 logger.error(f"Failed to connect to Minecraft server: {str(e)}")
+                aws_data_socket.close()
                 return
             
             # Set TCP_NODELAY to disable Nagle's algorithm
@@ -55,42 +56,78 @@ class TunnelClient:
             aws_data_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             
             # Create bidirectional pipe
-            def forward(source, destination, direction):
+            def forward(source, destination, direction, is_minecraft_to_aws=False):
+                source_name = "Minecraft" if is_minecraft_to_aws else "AWS"
+                dest_name = "AWS" if is_minecraft_to_aws else "Minecraft"
                 try:
+                    source.settimeout(300)  # 5 minute timeout
                     while not self._stop_event.is_set():
                         try:
                             data = source.recv(4096)
                             if not data:
+                                logger.debug(f"{source_name} connection closed")
                                 break
                             logger.debug(f"Forwarding {len(data)} bytes {direction}")
                             destination.send(data)
                         except socket.timeout:
+                            # Try sending a heartbeat if it's from AWS to Minecraft
+                            if not is_minecraft_to_aws:
+                                try:
+                                    destination.send(b'\x00')  # Heartbeat
+                                    logger.debug(f"Sent heartbeat to {dest_name}")
+                                except:
+                                    break
                             continue
                         except Exception as e:
-                            logger.error(f"Error in {direction} forwarding: {str(e)}")
+                            if not self._stop_event.is_set():
+                                logger.error(f"Error in {direction} forwarding: {str(e)}")
                             break
                 except Exception as e:
-                    logger.error(f"Error in {direction} forwarding: {str(e)}")
+                    if not self._stop_event.is_set():
+                        logger.error(f"Error in {direction} forwarding: {str(e)}")
                 finally:
                     try:
-                        source.close()
-                        destination.close()
+                        if not source.fileno() == -1:
+                            source.close()
                     except:
                         pass
+                    try:
+                        if not destination.fileno() == -1:
+                            destination.close()
+                    except:
+                        pass
+                    logger.debug(f"Forwarding thread {direction} stopped")
             
             # Start bidirectional forwarding
-            thread1 = threading.Thread(target=forward, args=(minecraft_socket, aws_data_socket, "minecraft->aws"))
-            thread2 = threading.Thread(target=forward, args=(aws_data_socket, minecraft_socket, "aws->minecraft"))
+            thread1 = threading.Thread(target=forward, args=(minecraft_socket, aws_data_socket, "minecraft->aws", True))
+            thread2 = threading.Thread(target=forward, args=(aws_data_socket, minecraft_socket, "aws->minecraft", False))
             thread1.daemon = True
             thread2.daemon = True
             thread1.start()
             thread2.start()
             self.forward_threads.extend([thread1, thread2])
             
+            # Wait for either thread to finish
+            while thread1.is_alive() and thread2.is_alive() and not self._stop_event.is_set():
+                time.sleep(1)
+            
+            logger.debug("One of the forwarding threads has stopped")
+            
         except Exception as e:
             logger.error(f"Error handling Minecraft connection: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
+            # Close both sockets if they're still open
+            try:
+                if 'minecraft_socket' in locals() and minecraft_socket.fileno() != -1:
+                    minecraft_socket.close()
+            except:
+                pass
+            try:
+                if 'aws_data_socket' in locals() and aws_data_socket.fileno() != -1:
+                    aws_data_socket.close()
+            except:
+                pass
             self.active_connections -= 1
             logger.debug(f"Minecraft connection closed. Active connections: {self.active_connections}")
 
@@ -117,6 +154,9 @@ class TunnelClient:
             # Wait for new connection signals
             while not self._stop_event.is_set():
                 try:
+                    # Use a smaller buffer size for control messages
+                    # The control byte is followed by the connection ID
+                    self.aws_socket.settimeout(60)
                     data = self.aws_socket.recv(1)
                     if not data:
                         logger.error("AWS server closed the connection")
@@ -124,24 +164,42 @@ class TunnelClient:
                     
                     # Check if it's a new connection signal
                     if data == b'\x01':
-                        logger.debug("Received new connection signal from AWS")
-                        # Create a new socket for this connection's data
-                        aws_data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        aws_data_socket.connect((self.aws_ip, self.aws_port))
-                        
-                        # Send a special byte to identify this as a data socket
-                        # This helps the server distinguish between tunnel control and data connections
-                        aws_data_socket.send(b'\x02')
-                        
-                        # Start a thread to handle this connection
-                        threading.Thread(target=self.handle_minecraft_connection, args=(aws_data_socket,)).start()
+                        # Read the connection ID (up to 36 bytes)
+                        try:
+                            connection_id_bytes = self.aws_socket.recv(36)
+                            connection_id = connection_id_bytes.decode('utf-8')
+                            logger.debug(f"Received new connection signal from AWS for ID: {connection_id}")
+                            
+                            # Create a new socket for this connection's data
+                            aws_data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            aws_data_socket.connect((self.aws_ip, self.aws_port))
+                            
+                            # Send a special byte to identify this as a data socket, followed by the connection ID
+                            aws_data_socket.send(b'\x02' + connection_id_bytes)
+                            
+                            # Start a thread to handle this connection
+                            threading.Thread(target=self.handle_minecraft_connection, args=(aws_data_socket,)).start()
+                        except Exception as e:
+                            logger.error(f"Error reading connection ID: {str(e)}")
+                            
                     # Ignore heartbeat signals
                     elif data == b'\x00':
                         logger.debug("Received heartbeat from AWS")
+                    # Log unknown signals but don't treat them as errors
                     else:
-                        logger.warning(f"Received unknown signal from AWS: {data.hex()}")
+                        hex_value = data.hex()
+                        if len(hex_value) > 0 and all(c in '0123456789abcdef' for c in hex_value):
+                            logger.debug(f"Received control byte from AWS: {hex_value}")
+                        else:
+                            logger.warning(f"Received unknown signal from AWS: {hex_value}")
                         
                 except socket.timeout:
+                    # Send heartbeat
+                    try:
+                        self.aws_socket.send(b'\x00')
+                        logger.debug("Sent heartbeat to AWS")
+                    except:
+                        break
                     continue
                 except Exception as e:
                     if not self._stop_event.is_set():
