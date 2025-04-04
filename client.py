@@ -35,6 +35,8 @@ class TunnelClient:
         self.active_connections = 0
         self.forward_threads = []
         self._stop_event = threading.Event()
+        self._reconnect_delay = 5  # Initial reconnect delay (seconds)
+        self._max_reconnect_delay = 60  # Maximum reconnect delay (seconds)
         logger.info(f"TunnelClient initialized: {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
 
     def handle_minecraft_connection(self, aws_data_socket):
@@ -194,37 +196,73 @@ class TunnelClient:
                     except:
                         logger.error("Failed to send heartbeat, connection may be lost")
                         break
+                except ConnectionResetError as e:
+                    logger.error(f"Connection reset: {str(e)}")
+                    # Mark connection as failed and let the run loop handle reconnection
+                    self.connection_state = "error"
+                    break
                 except Exception as e:
                     if not self._stop_event.is_set():
                         logger.error(f"Error maintaining tunnel: {str(e)}")
                         logger.error(f"Traceback: {traceback.format_exc()}")
                     break
             
+            # If we exit the loop, update the connection state if it's not already stopped
+            if self.connection_state == "running":
+                self.connection_state = "error"
+                
             logger.info("Tunnel maintenance thread stopping")
             
         except Exception as e:
             logger.error(f"Error in tunnel maintenance: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             self.connection_state = "error"
+        finally:
+            # Make sure to close the socket
+            try:
+                if self.aws_socket:
+                    self.aws_socket.close()
+            except:
+                pass
 
-    def start(self):
-        """Start the tunnel client"""
-        try:
-            self.connection_state = "starting"
-            
-            # Start the tunnel maintenance thread
-            threading.Thread(target=self.maintain_tunnel).start()
-            
-            self.connection_state = "running"
-            logger.info(f"Tunnel client running. Connected to {self.aws_ip}:{self.aws_port}")
-            logger.info(f"Forwarding connections to localhost:{self.minecraft_port}")
-            
-            return True
-        except Exception as e:
-            self.connection_state = "failed"
-            logger.error(f"Failed to start client: {str(e)}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return False
+    def run(self):
+        """Run the tunnel client with automatic reconnection"""
+        retry_count = 0
+        reconnect_delay = self._reconnect_delay
+        
+        while not self._stop_event.is_set():
+            try:
+                # Start the tunnel maintenance thread
+                self.connection_state = "starting"
+                threading.Thread(target=self.maintain_tunnel).start()
+                
+                self.connection_state = "running"
+                logger.info(f"Tunnel client running. Connected to {self.aws_ip}:{self.aws_port}")
+                logger.info(f"Forwarding connections to localhost:{self.minecraft_port}")
+                
+                # Wait while the connection is active
+                while self.connection_state == "running" and not self._stop_event.is_set():
+                    time.sleep(1)
+                
+                # If we get here, the connection was lost
+                if not self._stop_event.is_set():
+                    retry_count += 1
+                    logger.info(f"Connection lost. Reconnecting in {reconnect_delay} seconds (attempt {retry_count})...")
+                    time.sleep(reconnect_delay)
+                    
+                    # Increase delay for next attempt (with maximum cap)
+                    reconnect_delay = min(reconnect_delay * 1.5, self._max_reconnect_delay)
+                else:
+                    break
+                    
+            except Exception as e:
+                if not self._stop_event.is_set():
+                    logger.error(f"Error in client run loop: {str(e)}")
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    time.sleep(reconnect_delay)
+                    reconnect_delay = min(reconnect_delay * 1.5, self._max_reconnect_delay)
+                else:
+                    break
 
     def stop(self):
         """Stop the tunnel client"""
@@ -279,27 +317,9 @@ def main(aws_ip, aws_port, minecraft_port):
     )
 
     try:
-        # Start the client
-        if not client.start():
-            logger.error("Failed to start client")
-            sys.exit(1)
-
-        logger.info(f"Client is running. Tunneling {aws_ip}:{aws_port} -> localhost:{minecraft_port}")
-        logger.info("Press Ctrl+C to stop the client")
-
-        # Keep the client running and monitor connection state
-        prev_connections = 0
-        while not client._stop_event.is_set():
-            time.sleep(1)
-            if client.connection_state != "running":
-                logger.error(f"Connection state changed to: {client.connection_state}")
-                break
-                
-            # Only log when the number of connections changes
-            if client.active_connections != prev_connections:
-                logger.info(f"Active connections: {client.active_connections}")
-                prev_connections = client.active_connections
-
+        # Use the new run method with automatic reconnection
+        client.run()
+        
     except KeyboardInterrupt:
         logger.info("Shutting down client...")
     except Exception as e:

@@ -178,67 +178,94 @@ class TunnelServer:
     def handle_tunnel_client(self, client_socket, client_addr):
         """Handle connections from the tunnel client"""
         try:
-            self.active_connections += 1
+            with self.connection_lock:
+                self.active_connections += 1
             logger.debug(f"New tunnel connection from {client_addr} (Active connections: {self.active_connections})")
             
             # Wait for the client to send the target port (4 bytes)
-            port_bytes = client_socket.recv(4)
-            logger.debug(f"Received port bytes: {port_bytes.hex()}")
-            logger.debug(f"Individual bytes: {[b for b in port_bytes]}")
-            if len(port_bytes) != 4:
-                logger.error(f"Invalid port data received: {len(port_bytes)} bytes")
-                return
+            try:
+                client_socket.settimeout(5)  # Set a timeout for the initial port data
+                port_bytes = client_socket.recv(4)
+                logger.debug(f"Received port bytes: {port_bytes.hex()}")
+                logger.debug(f"Individual bytes: {[b for b in port_bytes]}")
+                if len(port_bytes) != 4:
+                    logger.error(f"Invalid port data received: {len(port_bytes)} bytes")
+                    return
+                    
+                # Convert bytes to integer (little-endian)
+                target_port = int.from_bytes(port_bytes, byteorder='little')
+                logger.debug(f"Converted port bytes to integer: {target_port}")
                 
-            # Convert bytes to integer (little-endian)
-            target_port = int.from_bytes(port_bytes, byteorder='little')
-            logger.debug(f"Converted port bytes to integer: {target_port}")
-            
-            # Try big-endian conversion as well to check if that's the issue
-            big_endian_port = int.from_bytes(port_bytes, byteorder='big')
-            logger.debug(f"Big-endian interpretation: {big_endian_port}")
-            
-            # Validate port number
-            if not (0 <= target_port <= 65535):
-                logger.error(f"Invalid port number received: {target_port}")
-                return
+                # Try big-endian conversion as well to check if that's the issue
+                big_endian_port = int.from_bytes(port_bytes, byteorder='big')
+                logger.debug(f"Big-endian interpretation: {big_endian_port}")
                 
-            logger.debug(f"Tunnel client requested connection to port {target_port}")
-            
-            # Store the tunnel client connection
-            self.tunnel_clients[target_port] = (client_socket, client_addr)
-            logger.info(f"Registered tunnel for port {target_port}")
-            
-            # Set TCP_NODELAY to disable Nagle's algorithm
-            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            
-            # Keep the connection alive until closed
-            while True:
-                try:
-                    # Just check if the connection is still alive
-                    client_socket.settimeout(30)
-                    data = client_socket.recv(1)
-                    if not data:
-                        break
-                except socket.timeout:
-                    # Send a heartbeat
+                # Validate port number
+                if not (0 <= target_port <= 65535):
+                    # This might be Minecraft data rather than a port number
+                    logger.debug(f"Invalid port number received: {target_port}, treating as a client connection")
+                    # Close this connection gracefully rather than treating as an error
+                    client_socket.close()
+                    with self.connection_lock:
+                        self.active_connections -= 1
+                    return
+                    
+                logger.debug(f"Tunnel client requested connection to port {target_port}")
+                
+                # Store the tunnel client connection
+                with self.connection_lock:
+                    self.tunnel_clients[target_port] = (client_socket, client_addr)
+                logger.info(f"Registered tunnel for port {target_port}")
+                
+                # Set TCP_NODELAY to disable Nagle's algorithm
+                client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                
+                # Keep the connection alive until closed
+                client_socket.settimeout(30)  # Set longer timeout after initial setup
+                while True:
                     try:
-                        client_socket.send(b'\x00')
-                    except:
+                        # Just check if the connection is still alive
+                        data = client_socket.recv(1)
+                        if not data:
+                            logger.info(f"Tunnel client for port {target_port} disconnected (no data)")
+                            break
+                    except socket.timeout:
+                        # Send a heartbeat
+                        try:
+                            client_socket.send(b'\x00')
+                        except:
+                            logger.info(f"Tunnel client for port {target_port} disconnected (heartbeat failed)")
+                            break
+                    except ConnectionResetError:
+                        logger.info(f"Tunnel client for port {target_port} disconnected (connection reset)")
                         break
-                except Exception as e:
-                    logger.error(f"Error in tunnel client connection: {str(e)}")
-                    break
+                    except Exception as e:
+                        logger.error(f"Error in tunnel client connection: {str(e)}")
+                        break
+            except socket.timeout:
+                logger.error(f"Timeout waiting for port data from {client_addr}")
+                client_socket.close()
+                with self.connection_lock:
+                    self.active_connections -= 1
+                return
+            except Exception as e:
+                logger.error(f"Error receiving port data: {str(e)}")
+                client_socket.close()
+                with self.connection_lock:
+                    self.active_connections -= 1
+                return
             
             # Remove the tunnel client when disconnected
-            logger.info(f"Tunnel client for port {target_port} disconnected")
-            if target_port in self.tunnel_clients:
-                del self.tunnel_clients[target_port]
+            with self.connection_lock:
+                if target_port in self.tunnel_clients:
+                    del self.tunnel_clients[target_port]
             
         except Exception as e:
             logger.error(f"Error handling tunnel client: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
-            self.active_connections -= 1
+            with self.connection_lock:
+                self.active_connections -= 1
             logger.debug(f"Tunnel client connection closed. Active connections: {self.active_connections}")
 
     def start(self):
@@ -283,7 +310,6 @@ class TunnelServer:
                                            args=(client_socket, client_addr)).start()
                         # Minecraft protocol has a specific format for the first byte
                         # Tunnel clients will send 4 bytes for the port
-                        # For now, we'll use a simple heuristic: check if it's a valid ASCII character
                         elif first_byte[0] >= 32 and first_byte[0] <= 126:
                             # Likely a Minecraft client - find the appropriate tunnel
                             port_to_use = None
@@ -299,10 +325,16 @@ class TunnelServer:
                                 logger.error(f"No tunnel available for Minecraft client from {client_addr}")
                                 client_socket.close()
                         else:
-                            # Likely a tunnel client
-                            logger.debug(f"New tunnel client connection from {client_addr}")
-                            threading.Thread(target=self.handle_tunnel_client, 
-                                            args=(client_socket, client_addr)).start()
+                            # If it's not a valid ASCII character and not our control bytes,
+                            # it's probably the start of a port number
+                            try:
+                                # Try to handle it as a tunnel client connection
+                                logger.debug(f"New tunnel client connection from {client_addr}")
+                                threading.Thread(target=self.handle_tunnel_client, 
+                                               args=(client_socket, client_addr)).start()
+                            except Exception as e:
+                                logger.error(f"Failed to handle connection: {str(e)}")
+                                client_socket.close()
                     except socket.timeout:
                         logger.error(f"Timeout while determining client type from {client_addr}")
                         client_socket.close()
