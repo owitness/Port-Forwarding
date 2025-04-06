@@ -15,8 +15,7 @@ logging.basicConfig(
     level=logging.INFO,  # Change to INFO level to reduce verbosity
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('port_forwarder.log')
+        logging.StreamHandler()  # Remove the FileHandler, only log to console
     ]
 )
 logger = logging.getLogger(__name__)
